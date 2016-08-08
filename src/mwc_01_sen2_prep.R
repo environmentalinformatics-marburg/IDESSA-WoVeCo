@@ -1,0 +1,1 @@
+# Check Sentinel-2 data and compute artifical images
