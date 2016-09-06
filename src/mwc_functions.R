@@ -1,6 +1,7 @@
 # Extract samples of high resolution pixels based on low resolution raster overlay
 sample_xres <- function(lowres, highres_files, highres_prj = NULL,
-                        path_rdata, path_temp, n = 10000){
+                        path_rdata, path_temp, path_highres_results,
+                        n = 10000){
   library(raster)
   library(rgdal)
   library(sp)
@@ -33,8 +34,7 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
   mask <- disaggregate(mask)
   
   
-  # lowres_pixels <- lapply(seq(length(mask)), function(p){
-  lowres_pixels <- lapply(seq(2), function(p){
+  lowres_pixels <- lapply(seq(length(mask)), function(p){
     lowres_pixels <- crop(lowres[[1]], mask[p, ], cellnumbers = TRUE)
     lowres_pixels <-  rasterToPolygons(lowres_pixels, fun=NULL, n=4, na.rm=TRUE, 
                                        digits=12, dissolve=FALSE)
@@ -46,7 +46,6 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
   
   
   # Select n low resolution pixel ids by chance --------------------------------
-  n <- 100
   n_sample <- round(n / length(lowres_pixels), 0)
   
   samples <- lapply(seq(length(lowres_pixels)), function(s){
@@ -56,17 +55,33 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
     lowres_pixels[[s]][lowres_samples,]
   })
   names(samples) <- sapply(lowres_pixels, names)
-  
-  
-  
+
+
   # Extract information from high resolution images for each sampled pixel -----
   highres_info <- lapply(seq(samples), function(s){
     act_highres <- raster(highres_files[grep(names(samples[s]), highres_files)])
     act_lowres_pixels <- spTransform(samples[[s]], CRS(projection(act_highres)))
-    ext <- extract(act_highres, act_lowres_pixels)
+    # ext <- extract(act_highres, act_lowres_pixels)
+    ext <- lapply(seq(length(act_lowres_pixels)), function(p){
+      act_ext <- tryCatch(crop(act_highres, act_lowres_pixels[p, ], snap = "in"),
+                          error = function(e)e)
+      if(inherits(act_ext, "error")){act_ext <- NULL}
+      return(act_ext)
+    })
+    return(ext)
   })
   names(highres_info) <- names(samples)
-  saveRDS(highres_info, file = paste0(path_rdata, "highres_info.rds"))
+  
+  for(i in length(highres_info)){
+    for(j in length(i)){
+      writeRaster(highres_info[[i]][[j]], 
+                  filename = paste0(path_highres_results, "lowres_info_", 
+                                    sprintf("%03d", i),
+                                    sprintf("_%03d", j),
+                                    ".tif"))
+    }
+  }
+  # saveRDS(highres_info, file = paste0(path_rdata, "highres_info.rds"))
   # highres_info <- readRDS(paste0(path_rdata, "highres_info.rds"))
   
 
