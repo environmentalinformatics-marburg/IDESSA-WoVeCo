@@ -1,0 +1,264 @@
+
+R version 3.3.1 (2016-06-21) -- "Bug in Your Hair"
+Copyright (C) 2016 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+[Previously saved workspace restored]
+
+> # Set path ---------------------------------------------------------------------
+> if(Sys.info()["sysname"] == "Windows"){
++   filepath_base <- "F:/GFO/BushEncroachment/"
++ } else {
++   filepath_base <- "/media/TOSHIBA\ EXT//GFO/BushEncroachment/"
++ }
+> 
+> path_figures <- paste0(filepath_base, "figures/")
+> path_raster <- paste0(filepath_base, "raster/")
+> path_rdata <- paste0(filepath_base, "rdata/")
+> path_temp <- paste0(filepath_base, "temp/")
+> path_vector <- paste0(filepath_base, "vector/")
+> path_model <- paste0(filepath_base, "model/")
+> path_scripts <- paste0(filepath_base, "scripts/molopo_wc/src/")
+> 
+> 
+> # Libraries --------------------------------------------------------------------
+> library(gpm)
+Loading required package: caret
+Loading required package: lattice
+Loading required package: ggplot2
+Loading required package: gridExtra
+Loading required package: impute
+Loading required package: latticeExtra
+Loading required package: RColorBrewer
+
+Attaching package: ‘latticeExtra’
+
+The following object is masked from ‘package:ggplot2’:
+
+    layer
+
+Loading required package: raster
+Loading required package: sp
+Loading required package: satellite
+Loading required package: Rcpp
+Loading required package: plyr
+Loading required package: dplyr
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:plyr’:
+
+    arrange, count, desc, failwith, id, mutate, rename, summarise,
+    summarize
+
+The following objects are masked from ‘package:raster’:
+
+    intersect, select, union
+
+The following object is masked from ‘package:gridExtra’:
+
+    combine
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+
+Attaching package: ‘gpm’
+
+The following object is masked from ‘package:satellite’:
+
+    lutInfo
+
+> library(raster)
+> library(ggplot2)
+> library(rgdal)
+rgdal: version: 1.1-10, (SVN revision 622)
+ Geospatial Data Abstraction Library extensions to R successfully loaded
+ Loaded GDAL runtime: GDAL 2.1.0, released 2016/04/25
+ Path to GDAL shared files: /usr/local/anaconda2/lib/python2.7/site-packages/sen2cor-2.2.1-py2.7.egg/sen2cor/cfg/gdal_data
+ Loaded PROJ.4 runtime: Rel. 4.9.2, 08 September 2015, [PJ_VERSION: 492]
+ Path to PROJ.4 shared files: (autodetected)
+ Linking to sp version: 1.2-3 
+> library(Rsenal)
+
+Attaching package: ‘Rsenal’
+
+The following object is masked from ‘package:gpm’:
+
+    plotModelCV
+
+> library(foreach)
+> 
+> 
+> # Additional settings ----------------------------------------------------------
+> rasterOptions(tmpdir = path_temp)
+> 
+> ################################################################################
+> # Process Sentinel-2 dataset-------------------------------------------------
+> ################################################################################
+> drs_S2<-dir(path = path_raster, 
++             pattern = "S2A_USER_MTD_SAFL2A_PDMC.*data", full.names = TRUE)
+> 
+> sen2<- foreach(i = drs_S2, season = c("summer", "autumn", "winter")) %do% {
++   fls <- list.files(i, pattern = ".img$", full.names = TRUE)
++   bands <- paste0("B", c(2:8, 11, 12))
++   
++   # band layers
++   bands_id <- sapply(bands, function(i) grep(i, fls))
++   bands_id <- unlist(bands_id)
++   fls_bands <- fls[bands_id]
++   rst_bands <- stack(fls_bands)
++   
++   # ndvi layers
++   ndvi_id <- grep("ndvi", fls)
++   fls_ndvi <- fls[ndvi_id]
++   rst_ndvi <- stack(fls_ndvi)
++   
++   # pca layers
++   pca_id <- grep("pca", fls)
++   fls_pca <- fls[pca_id]
++   rst_pca <- stack(fls_pca)
++   
++   # stack all layers
++   rst_all <- stack(rst_bands, rst_ndvi, rst_pca)
++   names(rst_all) <- paste(names(rst_all), season, sep = "_")
++   
++   return(rst_all)
++ }
+> 
+> sen2 <- stack(sen2)
+> 
+> # Process Sentinel-1 dataset names ---------------------------------------------
+> fls <- list.files(path = paste0(path_raster, "S1A_IW_GRDH_1SDV"), 
++                   pattern = ".img$", full.names = TRUE)
+> sen1 <- stack(fls)
+> 
+> 
+> # Create combined Sentinel 1/2 data stack --------------------------------------
+> sen <- stack(sen1, sen2)
+> 
+> 
+> 
+> ################################################################################
+> ###Prediction GPM
+> ################################################################################
+> 
+> GPMrf <- get(load(paste0(path_model,"models_rf_2016-08-25.RData")))
+> ###Validation
+>  var_imp <- compVarImp(GPMrf)
+>  var_imp_scale <- compVarImp(GPMrf,scale=TRUE)
+> 
+> png(paste0(path_figures,"gpm_varImp_all.png"))
+> plotVarImp(var_imp)
+[[1]]
+
+> dev.off()
+null device 
+          1 
+> 
+> png(paste0(path_figures,"gpm_varimp_heat.png"))
+> plotVarImpHeatmap(var_imp_scale, xlab = "Class", ylab = "Band")
+> dev.off()
+null device 
+          1 
+> # 
+> tstat <- compContTests(GPMrf, mean = TRUE)
+> tstat
+[[1]]
+  Response Kappa_mean Kappa_location_mean Kappa_histogram_mean
+1    class  0.9447797           0.9643078            0.9797494
+  Kappa_change_agreement_mean Kappa_quantity_agreement_mean
+1                    9.090909                      11.26157
+  Kappa_quantity_disagreement_mean Kappa_allocation_agreement_mean
+1                         1.612903                        75.24936
+  Kappa_allocation_disagreement_mean Bias_mean POD_mean     FAR_mean
+1                           2.785253  1.000471        1 0.0004700353
+     POFD_mean Accuracy_mean SR_mean TS_mean  ETS_mean   HK_mean   HSS_mean
+1 0.0003883495    0.05715515 0.99953 0.99953 0.9487137 0.9996117 0.05560004
+
+[[2]]
+[[2]][[1]]
+  Response   Accuracy     Bias POD         FAR        POFD        SR        TS
+1    class 0.05677419 1.000000   1 0.000000000 0.000000000 1.0000000 1.0000000
+2    class 0.05766513 1.002356   1 0.002350176 0.001941748 0.9976498 0.9976498
+3    class 0.05695853 1.000000   1 0.000000000 0.000000000 1.0000000 1.0000000
+4    class 0.05729647 1.000000   1 0.000000000 0.000000000 1.0000000 1.0000000
+5    class 0.05708141 1.000000   1 0.000000000 0.000000000 1.0000000 1.0000000
+        ETS        HK        HSS  OR ORSS     Kappa Kappa_location
+1 0.9491602 1.0000000 0.05524154 Inf    1 0.9440321      0.9626346
+2 0.9468697 0.9980583 0.05607812 Inf    1 0.9434822      0.9648480
+3 0.9492185 1.0000000 0.05541515 Inf    1 0.9446143      0.9637956
+4 0.9491602 1.0000000 0.05573408 Inf    1 0.9471199      0.9657065
+5 0.9491602 1.0000000 0.05553133 Inf    1 0.9446500      0.9645542
+  Kappa_histogram Kappa_change_agreement Kappa_quantity_agreement
+1       0.9806754               9.090909                 11.26066
+2       0.9778558               9.090909                 11.27455
+3       0.9800982               9.090909                 11.25548
+4       0.9807533               9.090909                 11.25756
+5       0.9793643               9.090909                 11.25961
+  Kappa_quantity_disagreement Kappa_allocation_agreement
+1                    1.539171                   75.19067
+2                    1.763441                   75.13377
+3                    1.585253                   75.24193
+4                    1.533026                   75.43955
+5                    1.643625                   75.24087
+  Kappa_allocation_disagreement
+1                      2.918587
+2                      2.737327
+3                      2.826421
+4                      2.678955
+5                      2.764977
+
+
+> # 
+> #tstat_mean <- merge(tstat[[1]], prevalence, by.x = "Response", by.y = "RESPONSE")
+> # 
+> # tstat_mean[order(tstat_mean$Kappa_mean, decreasing = TRUE),]
+> # 
+> # ggplot(data = tstat_mean, aes(x = OCCURENCE, y = Kappa_mean)) + geom_point() + geom_smooth()
+> # 
+> 
+> ##Create Map
+> GPMpred <- predict(sen,GPMrf[[1]][[1]]$model)
+Loading required package: randomForest
+randomForest 4.6-12
+Type rfNews() to see new features/changes/bug fixes.
+
+Attaching package: ‘randomForest’
+
+The following object is masked from ‘package:dplyr’:
+
+    combine
+
+The following object is masked from ‘package:gridExtra’:
+
+    combine
+
+The following object is masked from ‘package:ggplot2’:
+
+    margin
+
+> writeRaster(GPMpred,paste0(path_model,"GPMprediction.tif"))
+> 
+> proc.time()
+     user    system   elapsed 
+25221.108   312.084 34995.844 

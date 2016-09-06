@@ -2,7 +2,7 @@
 
 # Set path ---------------------------------------------------------------------
 if(Sys.info()["sysname"] == "Windows"){
-  filepath_base <- "L:/GFO/BushEncroachment/"
+  filepath_base <- "F:/GFO/BushEncroachment/"
 } else {
   filepath_base <- "/media/TOSHIBA\ EXT//GFO/BushEncroachment/"
 }
@@ -15,6 +15,8 @@ path_vector <- paste0(filepath_base, "vector/")
 
 
 # Libraries --------------------------------------------------------------------
+library(doParallel)
+library(foreach)
 library(mapview)
 library(raster)
 library(RStoolbox)
@@ -38,48 +40,34 @@ names(sen2_files)
 # Compute some pixel-based artifical images ------------------------------------
 
 sen2_data <- lapply(sen2_files, function(ds){
-  stack(ds)
+  return(stack(ds))
 })
 names(sen2_data) <- names(sen2_files)
 
-for(ds in seq(length(sen2_data))){
-  # nir <- ds[[which("B8" == names(ds))]]
-  # red <- ds[[which("B4" == names(ds))]]
-  ndvi <- spectralIndices(sen2_data[[ds]], red = "B4", nir = "B8", indices = "NDVI")
-  filename <- paste0(dirname(sen2_data[[ds]][[1]]@file@name), "/ndvi.img")
-  writeRaster(ndvi, filename = filename)
-}
-
-# ndvi <- lapply(seq(length(sen2_data)), function(ds ){
-#   # nir <- ds[[which("B8" == names(ds))]]
-#   # red <- ds[[which("B4" == names(ds))]]
+sen2_data
+# Compute NDVI
+# for(ds in seq(length(sen2_data))){
 #   ndvi <- spectralIndices(sen2_data[[ds]], red = "B4", nir = "B8", indices = "NDVI")
 #   filename <- paste0(dirname(sen2_data[[ds]][[1]]@file@name), "/ndvi.img")
 #   writeRaster(ndvi, filename = filename)
-#   return(ndvi)
-# })
-# 
-#                                                                                                                     
-# 
-# names(ndvi) <- names(sen2_files)
-
-
-# 
-# writeRaster(ndvi, filename = )
-
-# for(i in a){
-#   print(i)
 # }
-# 
-# for(i in seq(length(a))){
-#   print(names(a[i]))
-# }
-# 
-# myreturn <- lapply(a, function(i){
-#   return(i)
-# })
-# 
-# myreturn <- lapply(seq(length(a)), function(i){
-#   return(i)
-# })
 
+
+#Compute PCA
+#cl <- makeCluster(detectCores()-1)
+#registerDoParallel(cl)
+
+#pca <- function(ds, sen2_data, path_temp){
+#  rasterOptions(tmpdir = path_temp)
+#  subst <- sen2_data[[ds]][[which(names(sen2_data[[ds]])%in%paste0("B",2:8)=="TRUE")]]
+#  pca_model <- rasterPCA(subst, nSamples = 0.05*ncell(subst), nCOMP=3)
+#  filename <- paste0(dirname(sen2_data[[ds]][[1]]@file@name), "/pca_model.RData")
+#  save(pca_model, file = filename)
+#  filename <- paste0(dirname(sen2_data[[ds]][[1]]@file@name), "/pca.img")
+#  writeRaster(pca_model$map, filename = filename, bylayer = TRUE)
+#}
+
+#foreach(ds = seq(length(sen2_data)), .packages = c("raster", "RStoolbox")) %dopar% pca(ds, sen2_data, path_temp)
+#stopCluster(cl)
+
+#unlink(path_temp, recursive=TRUE)

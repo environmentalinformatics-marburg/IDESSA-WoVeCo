@@ -1,0 +1,229 @@
+
+R version 3.3.1 (2016-06-21) -- "Bug in Your Hair"
+Copyright (C) 2016 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+[Previously saved workspace restored]
+
+> # Set path ---------------------------------------------------------------------
+> if(Sys.info()["sysname"] == "Windows"){
++   filepath_base <- "F:/GFO/BushEncroachment/"
++ } else {
++   filepath_base <- "/media/TOSHIBA\ EXT//GFO/BushEncroachment/"
++ }
+> 
+> path_figures <- paste0(filepath_base, "figures/")
+> path_raster <- paste0(filepath_base, "raster/")
+> path_rdata <- paste0(filepath_base, "rdata/")
+> path_temp <- paste0(filepath_base, "temp/")
+> path_vector <- paste0(filepath_base, "vector/")
+> path_model <- paste0(filepath_base, "model/")
+> path_scripts <- paste0(filepath_base, "scripts/molopo_wc/src/")
+> 
+> 
+> # Libraries --------------------------------------------------------------------
+> library(gpm)
+Loading required package: caret
+Loading required package: lattice
+Loading required package: ggplot2
+Loading required package: gridExtra
+Loading required package: impute
+Loading required package: latticeExtra
+Loading required package: RColorBrewer
+
+Attaching package: ‘latticeExtra’
+
+The following object is masked from ‘package:ggplot2’:
+
+    layer
+
+Loading required package: raster
+Loading required package: sp
+Loading required package: satellite
+Loading required package: Rcpp
+Loading required package: plyr
+Loading required package: dplyr
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:plyr’:
+
+    arrange, count, desc, failwith, id, mutate, rename, summarise,
+    summarize
+
+The following objects are masked from ‘package:raster’:
+
+    intersect, select, union
+
+The following object is masked from ‘package:gridExtra’:
+
+    combine
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+
+Attaching package: ‘gpm’
+
+The following object is masked from ‘package:satellite’:
+
+    lutInfo
+
+> library(raster)
+> library(ggplot2)
+> library(rgdal)
+rgdal: version: 1.1-10, (SVN revision 622)
+ Geospatial Data Abstraction Library extensions to R successfully loaded
+ Loaded GDAL runtime: GDAL 2.1.0, released 2016/04/25
+ Path to GDAL shared files: /usr/local/anaconda2/lib/python2.7/site-packages/sen2cor-2.2.1-py2.7.egg/sen2cor/cfg/gdal_data
+ Loaded PROJ.4 runtime: Rel. 4.9.2, 08 September 2015, [PJ_VERSION: 492]
+ Path to PROJ.4 shared files: (autodetected)
+ Linking to sp version: 1.2-3 
+> library(Rsenal)
+
+Attaching package: ‘Rsenal’
+
+The following object is masked from ‘package:gpm’:
+
+    plotModelCV
+
+> library(foreach)
+> 
+> 
+> # Additional settings ----------------------------------------------------------
+> rasterOptions(tmpdir = path_temp)
+> 
+> ################################################################################
+> # Process Sentinel-2 dataset-------------------------------------------------
+> ################################################################################
+> drs_S2<-dir(path = path_raster, 
++             pattern = "S2A_USER_MTD_SAFL2A_PDMC.*data", full.names = TRUE)
+> 
+> sen2<- foreach(i = drs_S2, season = c("summer", "autumn", "winter")) %do% {
++   fls <- list.files(i, pattern = ".img$", full.names = TRUE)
++   bands <- paste0("B", c(2:8, 11, 12))
++   
++   # band layers
++   bands_id <- sapply(bands, function(i) grep(i, fls))
++   bands_id <- unlist(bands_id)
++   fls_bands <- fls[bands_id]
++   rst_bands <- stack(fls_bands)
++   
++   # ndvi layers
++   ndvi_id <- grep("ndvi", fls)
++   fls_ndvi <- fls[ndvi_id]
++   rst_ndvi <- stack(fls_ndvi)
++   
++   # pca layers
++   pca_id <- grep("pca", fls)
++   fls_pca <- fls[pca_id]
++   rst_pca <- stack(fls_pca)
++   
++   # stack all layers
++   rst_all <- stack(rst_bands, rst_ndvi, rst_pca)
++   names(rst_all) <- paste(names(rst_all), season, sep = "_")
++   
++   return(rst_all)
++ }
+> 
+> sen2 <- stack(sen2)
+> 
+> # Process Sentinel-1 dataset names ---------------------------------------------
+> fls <- list.files(path = paste0(path_raster, "S1A_IW_GRDH_1SDV"), 
++                   pattern = ".img$", full.names = TRUE)
+> sen1 <- stack(fls)
+> 
+> 
+> # Create combined Sentinel 1/2 data stack --------------------------------------
+> sen <- stack(sen1, sen2)
+> 
+> ################################################################################
+> ###Prediction Caret
+> ################################################################################
+> #Load caret rf model
+> caretrf <- get(load(paste0(path_model,"model_rf_caret.RData")))
+> 
+> #validation using independent test Data
+> testData<- get(load(paste0(path_model,"testdata_caret.RData")))
+> testpredict <- predict(caretrf,testData)
+Loading required package: randomForest
+randomForest 4.6-12
+Type rfNews() to see new features/changes/bug fixes.
+
+Attaching package: ‘randomForest’
+
+The following object is masked from ‘package:dplyr’:
+
+    combine
+
+The following object is masked from ‘package:gridExtra’:
+
+    combine
+
+The following object is masked from ‘package:ggplot2’:
+
+    margin
+
+> kstat(testpredict,testData$class)
+                                   K      Kloc    Khisto        CA        QA
+Bare                       0.9532587 0.9843296 0.9684344 50.000000 43.673833
+Irrigation                 0.9988655 0.9992434 0.9996218 50.000000 44.922845
+Low Bush Encroachment      0.9429211 0.9495397 0.9930296 50.000000 10.608560
+Moderate Bush Encroachment 0.8967151 0.9100163 0.9853836 50.000000 22.282032
+Pan                        0.9359427 0.9557118 0.9793148 50.000000 38.489790
+Riverbed                   0.8204009 1.0000000 0.8204009 50.000000 49.593744
+Road                       0.9641673 0.9697721 0.9942205 50.000000 46.677747
+Settlements                0.9819041 0.9849715 0.9968858 50.000000 27.187163
+Severe Bush Encroachment   0.9205288 0.9528000 0.9661301 50.000000  9.409888
+Urban                      0.7267781 0.9930222 0.7318850 50.000000 49.248050
+Water                      0.9711477 0.9943729 0.9766434 50.000000 48.602476
+overall                    0.9358058 0.9531064 0.9818482  9.090909 11.257155
+                                   AA          AD          QD
+Bare                        6.0304733 0.096004301 0.199688946
+Irrigation                  5.0713947 0.003840172 0.001920086
+Low Bush Encroachment      37.1430192 1.973848428 0.274572301
+Moderate Bush Encroachment 24.8551195 2.457710105 0.405138150
+Pan                        10.7728971 0.499222365 0.238090666
+Riverbed                    0.3332931 0.000000000 0.072963269
+Road                        3.2032078 0.099844473 0.019200860
+Settlements                22.4000183 0.341775312 0.071043183
+Severe Bush Encroachment   37.3643672 1.850962923 1.374781590
+Urban                       0.5465008 0.003840172 0.201609032
+Water                       1.3572024 0.007680344 0.032641462
+overall                    74.5387467 3.667364298 1.445824773
+> 
+> #Plot Model characteristics
+> 
+> png(paste0(path_figures,"caret_varImp_all.png"))
+> plot(varImp(caretrf))
+> dev.off()
+null device 
+          1 
+> png(paste0(path_figures,"caret_varImp_10.png"))
+> plot(varImp(caretrf),10)
+> dev.off()
+null device 
+          1 
+> 
+> #Create Map
+> caretpred <- predict(sen,caretrf)
+Killed
