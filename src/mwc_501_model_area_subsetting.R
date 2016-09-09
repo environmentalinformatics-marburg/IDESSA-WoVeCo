@@ -2,7 +2,7 @@
 
 # Set path ---------------------------------------------------------------------
 if(Sys.info()["sysname"] == "Windows"){
-  filepath_base <- "E:/analysis/theunis/"
+  filepath_base <- "F:/analysis/theunis/"
 } else {
   filepath_base <- "/media/TOSHIBA\ EXT//GFO/BushEncroachment/"
 }
