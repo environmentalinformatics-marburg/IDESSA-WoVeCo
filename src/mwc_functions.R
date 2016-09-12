@@ -39,7 +39,7 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
 
   n_sample <- round(n / length(mask), 0)
   
-  for(m in 1:length(mask)){
+  for(m in seq(length(mask))){
     print(paste0("Processing mask subset ", m, " of ", length(mask)))
     
     highres_filename <- as.character(mask[m, ]@data[1,1])
@@ -62,7 +62,7 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
       lowres_samples <- append(lowres_samples, act_lowres_subset_samples)
     }
     saveRDS(lowres_samples, file = paste0(path_rdata, "lowres_subset_samples_", 
-                                             sprintf("%03d", m), ".rds"))
+                                             sprintf("%08d", m), ".rds"))
     
     
     # Extract information from high resolution images for each sampled pixel
@@ -73,12 +73,15 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
       act_pix <- tryCatch(crop(act_highres, act_lowres_pixels[p, ], snap = "in"),
                           error = function(e)e)
       if(!inherits(act_pix, "error")){
-        writeRaster(act_pix, 
-                    filename = paste0(path_highres_results, "highres_info_", 
-                                      sprintf("%03d", m),
-                                      sprintf("_%03d", p),
-                                      ".tif"),
-                    overwrite = TRUE)
+        filepath <- paste0(path_highres_results, 
+                           "/subarea_",
+                           sprintf("%08d", m),
+                           "/highres_info_", 
+                           sprintf("%08d", m),
+                           sprintf("_%08d", p),
+                           ".tif")
+        dir.create(dirname(filepath), showWarnings = FALSE)
+        writeRaster(act_pix, filename = filepath, overwrite = TRUE)
       }
     }
 
@@ -95,7 +98,7 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
       lowres_pixel_data <- append(lowres_pixel_data, act_lowres_pixel_data)
     }
     saveRDS(lowres_pixel_data, file = paste0(path_rdata, "lowres_pixel_data_", 
-                                             sprintf("%03d", m), ".rds"))
+                                             sprintf("%08d", m), ".rds"))
     
   }
   
@@ -104,7 +107,7 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
 
   highres_pixel_samples <-   lapply(seq(length(mask)), function(m){
     list.files(path_highres_results, recursive = TRUE, full.names = TRUE,
-               pattern = glob2rx(sprintf("highres_info_%03d*.tif", m)))
+               pattern = glob2rx(sprintf("highres_info_%08d*.tif", m)))
   })
   names(highres_pixel_samples) <- sapply(seq(length(mask)), function(m) as.character(mask[m, ]@data[1,1]))
   
