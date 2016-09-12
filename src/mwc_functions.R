@@ -10,6 +10,7 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
   
   
   # Get overall extent of all highres images -----------------------------------
+  print("Computing extent of high resolution datasets...")
   highres_extent <- SpatialPolygonsDataFrame(
     as(extent(raster(highres_files[[1]])), "SpatialPolygons"),
     data = data.frame(NAME = highres_files[[1]]))
@@ -29,76 +30,89 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
   
   
   # Intersect low resolution and high resolution images ------------------------
+  print("Computing extent of low resolution datasets...")
   lowres_extent <- as(extent(lowres), "SpatialPolygons")
   projection(lowres_extent) <- projection(lowres)
   
   mask <- intersect(lowres_extent, highres_extent)
   mask <- disaggregate(mask)
+
+  n_sample <- round(n / length(mask), 0)
   
-  lowres_pixels <- lapply(seq(length(mask)), function(p){
-    lowres_pixels <- crop(lowres[[1]], mask[p, ], cellnumbers = TRUE)
-    lowres_pixels <-  rasterToPolygons(lowres_pixels, fun=NULL, n=4, na.rm=TRUE, 
+  for(m in length(mask)){
+    print(paste0("Processing mask subset ", m, " of ", length(mask)))
+    
+    highres_filename <- as.character(mask[m, ]@data[1,1])
+    
+    act_lowres_subset <- crop(lowres[[1]], mask[m, ], cellnumbers = TRUE)
+    act_lowres_subset_vec <- rasterToPolygons(act_lowres_subset, fun=NULL, n=4, na.rm=TRUE, 
                                        digits=12, dissolve=FALSE)
-    names(lowres_pixels) <- as.character(mask[p, ]@data[1,1])
-    return(lowres_pixels)
-  })
-  saveRDS(lowres_pixels, file = paste0(path_rdata, "lowres_pixels.rds"))
-  # lowres_pixels <- readRDS(paste0(path_rdata, "lowres_pixels.rds"))
-  
-  
-  # Select n low resolution pixel ids by chance --------------------------------
-  n_sample <- round(n / length(lowres_pixels), 0)
-  
-  samples <- lapply(seq(length(lowres_pixels)), function(s){
-    total_pixels <- length(lowres_pixels[[s]])
-    set.seed(s)
-    lowres_samples <- sample(total_pixels, n_sample)
-    lowres_pixels[[s]][lowres_samples,]
-  })
-  names(samples) <- sapply(lowres_pixels, names)
-  
-  
-  # Extract information from high resolution images for each sampled pixel -----
-  for(s in seq(length(samples))){
-    print(paste0("Processing sample ", s, " of ", length(samples)))
-    act_highres <- raster(highres_files[grep(names(samples[s]), highres_files)])
-    act_lowres_pixels <- spTransform(samples[[s]], CRS(projection(act_highres)))
-    ext <- lapply(seq(length(act_lowres_pixels)), function(p){
-      act_ext <- tryCatch(crop(act_highres, act_lowres_pixels[p, ], snap = "in"),
+    names(act_lowres_subset_vec) <- highres_filename
+    
+    # Define samples for actual area
+    set.seed(m)
+    lowres_samples_nbr <- sample(length(act_lowres_subset_vec), n_sample)
+    if(m == 1){
+      lowres_samples <- act_lowres_subset_vec[lowres_samples_nbr,]
+      names(lowres_samples) <- highres_filename
+      act_lowres_subset_samples <- lowres_samples
+    } else {
+      act_lowres_subset_samples <- act_lowres_subset_vec[lowres_samples_nbr,]
+      names(act_lowres_subset_samples) <- highres_filename
+      lowres_samples <- append(lowres_samples, act_lowres_subset_samples)
+    }
+    saveRDS(lowres_samples, file = paste0(path_rdata, "lowres_subset_samples_", 
+                                             sprintf("%03d", m), ".rds"))
+    
+    
+    # Extract information from high resolution images for each sampled pixel
+    act_highres <- raster(highres_files[grep(highres_filename, highres_files)])
+    act_lowres_pixels <- spTransform(act_lowres_subset_samples, CRS(projection(act_highres)))
+    
+    for(p in seq(length(act_lowres_pixels))){
+      act_pix <- tryCatch(crop(act_highres, act_lowres_pixels[p, ], snap = "in"),
                           error = function(e)e)
-      if(inherits(act_ext, "error")){act_ext <- NULL}
-      return(act_ext)
-    })
-    for(i in seq(length(ext))){
-      if(!is.null(ext [[i]])){
-        writeRaster(ext[[i]], 
-                    filename = paste0(path_highres_results, "lowres_info_", 
-                                      sprintf("%03d", s),
-                                      sprintf("_%03d", i),
+      if(!inherits(act_pix, "error")){
+        writeRaster(act_pix, 
+                    filename = paste0(path_highres_results, "highres_info_", 
+                                      sprintf("%03d", m),
+                                      sprintf("_%03d", p),
                                       ".tif"),
                     overwrite = TRUE)
       }
     }
+
+    # Extract information from low resolution images for each sampled pixel
+    if(m == 1){
+      lowres_pixel_data <- extract(lowres, act_lowres_subset_samples, cellnumbers = TRUE)
+      lowres_pixel_data <- list(do.call("rbind", lowres_pixel_data))
+      names(lowres_pixel_data) <- highres_filename
+    } else {
+      act_lowres_pixel_data <- extract(lowres, act_lowres_subset_samples, cellnumbers = TRUE)
+      act_lowres_pixel_data <- list(do.call("rbind", act_lowres_pixel_data))
+      names(act_lowres_pixel_data) <- highres_filename
+      
+      lowres_pixel_data <- append(lowres_pixel_data, act_lowres_pixel_data)
+    }
+    saveRDS(lowres_pixel_data, file = paste0(path_rdata, "lowres_pixel_data_", 
+                                             sprintf("%03d", m), ".rds"))
+    
   }
   
-  highres_samples <- list.files(path_highres_results, recursive = TRUE, full.names = TRUE,
-                                pattern = glob2rx("lowres_info_*.tif"))
-  
-  # Extract information from low resolution images for each sampled pixel ------
-  lowres_info <- lapply(seq(samples), function(s){
-    act_lowres_pixels <- spTransform(samples[[s]], CRS(projection(lowres)))
-    lowres_crop <- crop(lowres, act_lowres_pixels)
-    ext <- extract(lowres_crop, act_lowres_pixels, cellnumbers = TRUE)
+  # Combine return information -------------------------------------------------
+  names(lowres_samples) <- sapply(seq(length(mask)), function(m) as.character(mask[m, ]@data[1,1]))
+
+  highres_pixel_samples <-   lapply(seq(length(mask)), function(m){
+    list.files(path_highres_results, recursive = TRUE, full.names = TRUE,
+               pattern = glob2rx(sprintf("highres_info_%03d*.tif", m)))
   })
-  names(lowres_info) <- names(samples)
-  saveRDS(lowres_info, file = paste0(path_rdata, "lowres_info.rds"))
-  # lowres_info <- readRDS(paste0(path_rdata, "lowres_info.rds"))
+  names(highres_pixel_samples) <- sapply(seq(length(mask)), function(m) as.character(mask[m, ]@data[1,1]))
   
-  
-  # Combine high and low resolution information --------------------------------
-  info <- list(LowRes_Info = lowres_info, HighRes_Samples = highres_samples,
-               LowRes_Pixels = lowres_pixels)
+
+  info <- list(LowRes_Pixel_Data = lowres_pixel_data, HighRes_Pixel_Samples = highres_pixel_samples,
+               Sample_Mask = mask, LowRes_Samples = lowres_samples)
 }
+
 
 
 
