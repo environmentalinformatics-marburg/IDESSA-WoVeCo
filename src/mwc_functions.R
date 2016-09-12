@@ -39,7 +39,7 @@ sample_xres <- function(lowres, highres_files, highres_prj = NULL,
 
   n_sample <- round(n / length(mask), 0)
   
-  for(m in length(mask)){
+  for(m in 1:length(mask)){
     print(paste0("Processing mask subset ", m, " of ", length(mask)))
     
     highres_filename <- as.character(mask[m, ]@data[1,1])
