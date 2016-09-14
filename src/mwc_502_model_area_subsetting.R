@@ -34,18 +34,7 @@ rasterOptions(tmpdir = path_temp)
 sen <- stack_sen(path_raster, path_temp)
 
 
-# Pre-process high resolution aerial raster data -------------------------------
-aerial_prj <- CRS("+proj=tmerc +lat_0=0 +lon_0=23 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0")
-
-# Reproject aerial files to satellite projection (if necessary)
-# aerial_files <- list.files(paste0(path_raster, "aerial_images/"),
-#                            recursive = TRUE, full.names = TRUE, 
-#                            pattern = glob2rx("*_RECT.tif"))
-# 
-# warp(files = aerial_files, source_prj = aerial_prj, target_prj = "EPSG:32734", 
-#      outpath = paste0(path_raster, "aerial_images_utm34s/"),
-#      resampling = "near")
-
+# Extract samples --------------------------------------------------------------
 # Read aerial files (must be same projection as low resolution datasets)
 aerial_files <- list.files(paste0(path_raster, "aerial_images_utm34s/"),
                            recursive = TRUE, full.names = TRUE, 
@@ -53,13 +42,15 @@ aerial_files <- list.files(paste0(path_raster, "aerial_images_utm34s/"),
 
 # Compute extent of all aerial files
 polyg_highres <- extentRasterFiles(aerial_files)
+saveRDS(polyg_highres, file = paste0(path_rdata, "polyg_highres.rds"))
 
 # Compute extent of low resolution file
 polyg_lowres <- raster2Polygon(sen)
+saveRDS(polyg_lowres, file = paste0(path_rdata, "polyg_lowres.rds"))
 
 # Crop lowres raster to individual rasters based on polygons and set raster
 # values to pixel ID within original lowres raster
-lowres_crops <- rasterCrops(sen[[1]], polyg_highres)
+lowres_crops <- rasterCrops(rst = sen[[1]], polyg = polyg_highres)
 names(lowres_crops) <- aerial_files
 lowres_crops <- lowres_crops[grep("NULL", 
                                   sapply(lowres_crops, class), invert = TRUE)]

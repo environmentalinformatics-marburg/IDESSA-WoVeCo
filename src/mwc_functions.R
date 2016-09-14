@@ -3,10 +3,21 @@ warpRaster <- function(files, source_prj, target_prj, outpath,
                        resampling = "near", cores = NULL){
   
   require(gdalUtils)
-
+  require(doParallel)
+  require(foreach)
+  
+  if(is.null(cores)){
+    cl <- makeCluster(detectCores()-1)
+  } else {
+    cl <- makeCluster(cores)
+  }
+  
+  registerDoParallel(cl)
+  
   dir.create(outpath, showWarnings = FALSE)
   
-  for(f in files){
+  # for(f in files){
+  foreach(f = files, .packages = c("gdalUtils")) %dopar% {
     outfile <- paste0(outpath, basename(f))
     if(!file.exists(outfile)){
       print(paste0("Computing file ", outfile))
@@ -16,6 +27,7 @@ warpRaster <- function(files, source_prj, target_prj, outpath,
       print(paste0("File ", outfile, " already exists; skipping"))
     }
   }
+  stopCluster(cl)
 }
 
 
@@ -54,21 +66,34 @@ raster2Polygon <- function(rst){
 
 
 # Crop raster to polygons ------------------------------------------------------
-rasterCrops <- function(rst, polyg){
+rasterCrops <- function(rst, polyg, cores = NULL){
   
   require(raster)
+  require(doParallel)
+  require(foreach)
+  
+  if(is.null(cores)){
+    cl <- makeCluster(detectCores()-1)
+  } else {
+    cl <- makeCluster(cores)
+  }
+  
+  registerDoParallel(cl)
+  
   
   rst <- setValues(rst, seq(ncell(rst)))
   
-  rst_crops <- lapply(seq(length(polyg)), function(p){
-    rc <- tryCatch(crop(rst, polyg[p,]),
-                   error=function(cond){
-                     return(NULL)
-                   })
-  })
+  rst_crops <- foreach(p = seq(length(polyg)), .packages = c("raster", "sp", "rgdal")) %dopar% {
+                         rc <- tryCatch(crop(rst, polyg[p,]),
+                                        error=function(cond){
+                                          return(NULL)
+                                        })
+                         return(rc)
+                       }
+  stopCluster(cl)
   return(rst_crops)
 }
- 
+
 
 # Sample pixel IDs within rasters ----------------------------------------------
 rasterSample <- function(rst, n){
@@ -119,14 +144,14 @@ highResExtractSample <- function(lowres_raster, sample_ids, path_highres_results
   return(highres_extract_sample_files)
 }
 
-if(is.null(cores)){
-  cl <- makeCluster(detectCores()-1)
-} else {
-  cl <- makeCluster(cores)
-}
-registerDoParallel(cl)
-foreach(f = files) %do% 
-  stopCluster(cl)
+# if(is.null(cores)){
+#   cl <- makeCluster(detectCores()-1)
+# } else {
+#   cl <- makeCluster(cores)
+# }
+# registerDoParallel(cl)
+# foreach(f = files) %do% 
+#   stopCluster(cl)
 
 # # Extract samples of high resolution pixels based on low resolution raster overlay
 # sample_xres <- function(lowres, highres_files, highres_prj = NULL,
