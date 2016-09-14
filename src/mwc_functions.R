@@ -79,8 +79,7 @@ rasterCrops <- function(rst, polyg, cores = NULL){
   }
   
   registerDoParallel(cl)
-  
-  
+
   rst <- setValues(rst, seq(ncell(rst)))
   
   rst_crops <- foreach(p = seq(length(polyg)), .packages = c("raster", "sp", "rgdal")) %dopar% {
@@ -99,7 +98,7 @@ rasterCrops <- function(rst, polyg, cores = NULL){
 rasterSample <- function(rst, n){
   
   require(raster)
-  
+
   n_share = round(n / length(rst), 0)
   
   rst_sample <- lapply(seq(length(rst)), function(r){
@@ -112,18 +111,28 @@ rasterSample <- function(rst, n){
 
 
 # Get values from highres dataset based on lowres pixel position samples -------
-highResExtractSample <- function(lowres_raster, sample_ids, path_highres_results){
+highResExtractSample <- function(lowres_raster, sample_ids, path_highres_results,
+                                 cores = NULL){
   
   # idea for rasterizing from Luke Macauly, http://gis.stackexchange.com/questions/130522/increasing-speed-of-crop-mask-extract-raster-by-many-polygons-in-r
   require(raster)
   require(doParallel)
   require(foreach)
   
-  for(s in seq(length(sample_ids))){
+  if(is.null(cores)){
+    cl <- makeCluster(detectCores()-1)
+  } else {
+    cl <- makeCluster(cores)
+  }
+  
+  registerDoParallel(cl)
+  
+  
+  foreach(s = seq(length(sample_ids)), .packages = c("raster", "sp", "rgdal")) %dopar% {    
     highrst_rst <- raster(names(sample_ids[s]))
     
     lowres <- setValues(raster(lowres_raster), 0)
-    lowres[lowres_sample_ids[[s]]] <- 1
+    lowres[sample_ids[[s]]] <- 1
     lowres <- crop(lowres, highrst_rst)
     
     lowres_polyg <- rasterToPolygons(lowres, fun = function(x){x == 1})
@@ -137,7 +146,7 @@ highResExtractSample <- function(lowres_raster, sample_ids, path_highres_results
                                           sprintf("highres_values_%08d.rds", s)))
   }
   
-  
+  stopCluster(cl)
   highres_extract_sample_files <- list.files(path_highres_results,
                                              full.names = TRUE,
                                              pattern = glob2rx("highres_values_*.rds"))
