@@ -1,8 +1,9 @@
 # Reproject images using gdalwarp ----------------------------------------------
 warpRaster <- function(files, source_prj, target_prj, outpath,
-                       resampling = "near"){
+                       resampling = "near", cores = NULL){
   
   require(gdalUtils)
+
   dir.create(outpath, showWarnings = FALSE)
   
   for(f in files){
@@ -10,12 +11,11 @@ warpRaster <- function(files, source_prj, target_prj, outpath,
     if(!file.exists(outfile)){
       print(paste0("Computing file ", outfile))
       gdalwarp(f, outfile, s_srs = source_prj, t_srs = target_prj,
-               r = resampling)
+               r = resampling, multi=TRUE)
     } else {
       print(paste0("File ", outfile, " already exists; skipping"))
     }
   }
-  
 }
 
 
@@ -91,7 +91,8 @@ highResExtractSample <- function(lowres_raster, sample_ids, path_highres_results
   
   # idea for rasterizing from Luke Macauly, http://gis.stackexchange.com/questions/130522/increasing-speed-of-crop-mask-extract-raster-by-many-polygons-in-r
   require(raster)
-  
+  require(doParallel)
+  require(foreach)
   
   for(s in seq(length(sample_ids))){
     highrst_rst <- raster(names(sample_ids[s]))
@@ -118,7 +119,14 @@ highResExtractSample <- function(lowres_raster, sample_ids, path_highres_results
   return(highres_extract_sample_files)
 }
 
-
+if(is.null(cores)){
+  cl <- makeCluster(detectCores()-1)
+} else {
+  cl <- makeCluster(cores)
+}
+registerDoParallel(cl)
+foreach(f = files) %do% 
+  stopCluster(cl)
 
 # # Extract samples of high resolution pixels based on low resolution raster overlay
 # sample_xres <- function(lowres, highres_files, highres_prj = NULL,
