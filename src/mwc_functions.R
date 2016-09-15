@@ -129,7 +129,7 @@ highResExtractSample <- function(lowres_raster, sample_ids, path_highres_results
   
   
   foreach(s = seq(length(sample_ids)), .packages = c("raster", "sp", "rgdal")) %dopar% {    
-    highrst_rst <- raster(names(sample_ids[s]))
+    highrst_rst <- stack(names(sample_ids[s]))
     
     lowres <- setValues(raster(lowres_raster), 0)
     lowres[sample_ids[[s]]] <- 1
@@ -139,8 +139,11 @@ highResExtractSample <- function(lowres_raster, sample_ids, path_highres_results
     
     highres_values <- lapply(seq(length(lowres_polyg)), function(p){
       print(p)
-      rasterize(lowres_polyg[p, ], crop(highrst_rst, extent(lowres_polyg[p, ])), 
-                mask=TRUE)
+      highrst_rst_layers <- lapply(seq(3), function(l){
+        rasterize(lowres_polyg[p, ], crop(highrst_rst[[l]], extent(lowres_polyg[p, ])), 
+                  mask=TRUE)
+      })
+      return(stack(highrst_rst_layers))
     })
     saveRDS(highres_values, file = paste0(path_highres_results, 
                                           sprintf("highres_values_%08d.rds", s)))

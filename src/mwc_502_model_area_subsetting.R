@@ -69,6 +69,5 @@ aerial_files_extract_sample <- highResExtractSample(
 lowres_sample_values <- sen[unlist(lowres_sample_ids, recursive = TRUE,
                                    use.names = FALSE)]
 
-saveRDS(lowres_sample_values, file = paste0(path_rdata, 
-                                      sprintf("lowres_sample_values.rds", s)))
+saveRDS(lowres_sample_values, file = paste0(path_rdata, "lowres_sample_values.rds"))
 
