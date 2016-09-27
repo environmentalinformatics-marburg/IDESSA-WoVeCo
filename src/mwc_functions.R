@@ -156,6 +156,39 @@ highResExtractSample <- function(lowres_raster, sample_ids, path_highres_results
   return(highres_extract_sample_files)
 }
 
+
+getLowResIDsfromHighResFiles <- function(lowres_raster, highres_files, 
+                                         cores = NULL){
+  
+  require(raster)
+  require(rgeos)
+  require(doParallel)
+  require(foreach)
+  
+  
+  if(is.null(cores)){
+    cl <- makeCluster(detectCores()-1)
+  } else {
+    cl <- makeCluster(cores)
+  }
+  
+  registerDoParallel(cl)
+  
+  rst <- setValues(lowres_raster, seq(ncell(lowres_raster)))
+  
+  pids_all <- foreach(f = seq(length(highres_files)), .packages = c("raster", "sp", "rgdal", "rgeos")) %dopar% {
+    
+    highres_rst <- readRDS(highres_files[f])
+
+    pids <- lapply(highres_rst, function(s){
+      extract(rst, gCentroid(as(s, "SpatialPoints")))
+    })
+    return(pids)
+  }
+  stopCluster(cl)
+  return(pids_all)
+}
+
 # if(is.null(cores)){
 #   cl <- makeCluster(detectCores()-1)
 # } else {
